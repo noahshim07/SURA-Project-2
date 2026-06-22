@@ -1,0 +1,4 @@
+"0",""
+"0",""
+"0","ggplot(Dicipline, aes(x = AI, y = CXT1, color = Dicipline)) +"
+"0","  geom_smooth(method = ""lm"", se = FALSE)"

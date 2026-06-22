@@ -1,0 +1,3 @@
+"0","ggplot(Race, aes(x = AI, y = CXT1, "
+"0","                      color = Race, "
+"0","                      group = Race)) + geom_line()"

@@ -1,0 +1,2 @@
+"0","ggplot(Race, aes(x = AI, y = CXT1, color = Race)) +"
+"0","  geom_smooth(method = ""lm"", se = FALSE)"

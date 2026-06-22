@@ -1,0 +1,6 @@
+"0","boxplot(CXT2b ~ AI, data = CXT2b_clean,"
+"0","        names = c(""Students cannot use AI"", ""Not Specified"", ""Students can use AI""),"
+"0","        main = ""Points by AI Use for CXT2b"","
+"0","        xlab = ""AI Category"","
+"0","        ylab = ""Points"","
+"0","        col = c(""lightblue"", ""lightgreen"", ""lightyellow""))"

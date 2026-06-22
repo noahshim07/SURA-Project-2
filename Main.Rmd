@@ -1,0 +1,93 @@
+---
+title: "Main"
+output: html_document
+---
+
+```{r}
+# --- Loading Data ---
+library(readxl)
+SuraData <- read_excel("SuraData/SuraUpdatedData-6.xlsx")
+```
+
+```{r}
+# --- Creating new data sets for each CXT rubric categories without null values ---
+CXT1_clean <- SuraData[!is.na(SuraData[[7]]), ]
+CXT2a_clean <- SuraData[!is.na(SuraData[[9]]), ]
+CXT2b_clean <- SuraData[!is.na(SuraData[[11]]), ]
+CXT3_clean <- SuraData[!is.na(SuraData[[13]]), ]
+CXT4a_clean <- SuraData[!is.na(SuraData[[15]]), ]
+CXT4b_clean <- SuraData[!is.na(SuraData[[17]]), ]
+
+# --- Converting AI variable from numeric to categorical  ---
+CXT1_clean$AI  <- as.factor(CXT1_clean$AI)
+CXT2a_clean$AI <- as.factor(CXT2a_clean$AI)
+CXT2b_clean$AI <- as.factor(CXT2b_clean$AI)
+CXT3_clean$AI  <- as.factor(CXT3_clean$AI)
+CXT4a_clean$AI <- as.factor(CXT4a_clean$AI)
+CXT4b_clean$AI <- as.factor(CXT4b_clean$AI)
+
+# --- Naming each categories for AI variable ---
+levels(CXT1_clean$AI)  <- c("Students cannot use AI", "Not Specified", "Students can use AI")
+levels(CXT2a_clean$AI) <- c("Students cannot use AI", "Not Specified", "Students can use AI")
+levels(CXT2b_clean$AI) <- c("Students cannot use AI", "Not Specified", "Students can use AI")
+levels(CXT3_clean$AI)  <- c("Students cannot use AI", "Not Specified", "Students can use AI")
+levels(CXT4a_clean$AI) <- c("Students cannot use AI", "Not Specified", "Students can use AI")
+levels(CXT4b_clean$AI) <- c("Students cannot use AI", "Not Specified", "Students can use AI")
+
+# --- Fit linear models of relationships between each CXT outcomes and AI usage levels---
+model1  <- lm(CXT1  ~ AI, data = CXT1_clean)
+model2a <- lm(CXT2a ~ AI, data = CXT2a_clean)
+model2b <- lm(CXT2b ~ AI, data = CXT2b_clean)
+model3  <- lm(CXT3  ~ AI, data = CXT3_clean)
+model4a <- lm(CXT4a ~ AI, data = CXT4a_clean)
+model4b <- lm(CXT4b ~ AI, data = CXT4b_clean)
+
+# --- Summaries of the linear models created above to obtain p-values that determines rather the model is statistically significant or not---
+summary(model1)
+summary(model2a)
+summary(model2b)
+summary(model3)
+summary(model4a)
+summary(model4b)
+
+# --- Box plot visualizations for each CXT learning outcomes ---
+boxplot(CXT1 ~ AI, data = CXT1_clean,
+        names = c("Students cannot use AI", "Not Specified", "Students can use AI"),
+        main = "Points by AI Use for CXT1",
+        xlab = "AI Category",
+        ylab = "Points",
+        col = c("lightblue", "lightgreen", "lightyellow"))
+boxplot(CXT2a ~ AI, data = CXT2a_clean,
+        names = c("Students cannot use AI", "Not Specified", "Students can use AI"),
+        main = "Points by AI Use for CXT2a",
+        xlab = "AI Category",
+        ylab = "Points",
+        col = c("lightblue", "lightgreen", "lightyellow"))
+boxplot(CXT2b ~ AI, data = CXT2b_clean,
+        names = c("Students cannot use AI", "Not Specified", "Students can use AI"),
+        main = "Points by AI Use for CXT2b",
+        xlab = "AI Category",
+        ylab = "Points",
+        col = c("lightblue", "lightgreen", "lightyellow"))
+boxplot(CXT3 ~ AI, data = CXT3_clean,
+        names = c("Students cannot use AI", "Not Specified", "Students can use AI"),
+        main = "Points by AI Use for CXT3",
+        xlab = "AI Category",
+        ylab = "Points",
+        col = c("lightblue", "lightgreen", "lightyellow"))
+boxplot(CXT4a ~ AI, data = CXT4a_clean,
+        names = c("Students cannot use AI", "Not Specified", "Students can use AI"),
+        main = "Points by AI Use for CXT4a",
+        xlab = "AI Category",
+        ylab = "Points",
+        col = c("lightblue", "lightgreen", "lightyellow"))
+boxplot(CXT4b ~ AI, data = CXT4b_clean,
+        names = c("Students cannot use AI", "Not Specified", "Students can use AI"),
+        main = "Points by AI Use for CXT4b",
+        xlab = "AI Category",
+        ylab = "Points",
+        col = c("lightblue", "lightgreen", "lightyellow"))
+
+```
+
+

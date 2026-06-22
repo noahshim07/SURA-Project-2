@@ -1,0 +1,17 @@
+"0","Dicipline<- SuraUpdatedData_7[!is.na(SuraUpdatedData_7[[23]]), ]
+Citizenship<- SuraUpdatedData_7[!is.na(SuraUpdatedData_7[[24]]), ]
+Sex<- SuraUpdatedData_7[!is.na(SuraUpdatedData_7[[25]]), ]
+Race<- SuraUpdatedData_7[!is.na(SuraUpdatedData_7[[26]]), ]
+HighschoolQPA<- SuraUpdatedData_7[!is.na(SuraUpdatedData_7[[27]]), ]
+FirstGen<- SuraUpdatedData_7[!is.na(SuraUpdatedData_7[[28]]), ]
+
+ggplot(Dicipline, aes(x = AI, y = CXT1, 
+                      color = Dicipline, 
+                      group = Dicipline)) + geom_line()
+ggplot(Citizenship, aes(x = AI, y = CXT1, 
+                      color = Citizenship, 
+                      group = Citizenship)) + geom_line()
+"
+"0","ggplot(Sex, aes(x = AI, y = CXT1, "
+"0","                      color = Sex, "
+"0","                      group = Sex)) + geom_line()"

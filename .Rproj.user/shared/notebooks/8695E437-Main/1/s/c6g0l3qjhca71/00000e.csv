@@ -1,0 +1,2 @@
+"0","ggplot(Citizenship, aes(x = AI, y = CXT1, color = Citizenship)) +"
+"0","  geom_smooth(method = ""lm"", se = FALSE)"

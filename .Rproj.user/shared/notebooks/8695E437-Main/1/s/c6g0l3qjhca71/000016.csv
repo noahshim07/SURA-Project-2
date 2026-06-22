@@ -1,0 +1,2 @@
+"0","ggplot(FirstGen, aes(x = AI, y = CXT1, color = FirstGen)) +"
+"0","  geom_smooth(method = ""lm"", se = FALSE)"

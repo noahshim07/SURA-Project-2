@@ -1,0 +1,3 @@
+"0","ggplot(HighschoolQPA, aes(x = AI, y = CXT1, "
+"0","                      color = HSQPA, "
+"0","                      group = HSQPA)) + geom_line()"
