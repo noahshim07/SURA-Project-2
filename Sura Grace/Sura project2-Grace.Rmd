@@ -1,0 +1,486 @@
+---
+title: "Sura Project 2 - Grace Xu"
+output:
+  html_document:
+    df_print: paged
+---
+#set up and merge data
+```{r}
+response_data <- read.csv(
+  "~/Desktop/CXT SURA Data Entry (Responses) - Form Responses 1.csv",
+  header = TRUE
+)
+names(response_data)
+
+demographics_data <- read.csv(
+  "~/Desktop/demographics_data.csv",
+  header = TRUE
+)
+
+names(demographics_data)
+
+merged_data <- merge(
+  response_data,
+  demographics_data,
+  by.x = "DCID..EX..DC1233.or.DCF2456.",
+  by.y = "DCID2",
+  all.x = TRUE
+)
+
+dim(merged_data)
+names(merged_data)
+head(merged_data[, c(
+  "DCID..EX..DC1233.or.DCF2456.",
+  "SEX",
+  "FIRST.GEN"
+)])
+
+merged_data$DomesticStatus <- ifelse(
+  merged_data$CITIZENSHIP %in% c("U", "P"),
+  "Domestic",
+  "International"
+)
+```
+
+#merge data and do t-tests against cxts and gender
+```{r}
+
+merged_data$FIRST_GEN <- merged_data$FIRST.GEN
+
+merged_data$DomesticStatus <- ifelse(
+  merged_data$CITIZENSHIP %in% c("U", "P"),
+  "Domestic",
+  "International"
+)
+
+gender_data <- subset(
+  merged_data,
+  SEX %in% c("F", "M")
+)
+
+t.test(CXT1 ~ SEX, data = gender_data)
+t.test(CXT2a ~ SEX, data = gender_data)
+t.test(CXT2b ~ SEX, data = gender_data)
+t.test(CXT3 ~ SEX, data = gender_data)
+t.test(CXT4a ~ SEX, data = gender_data)
+t.test(CXT4b ~ SEX, data = gender_data)
+
+```
+
+# t-test against cxts and first generation status
+```{r}
+firstgen_data <- subset(
+  merged_data,
+  FIRST_GEN %in% c("Y", "N")
+)
+
+table(firstgen_data$FIRST_GEN)
+
+t.test(CXT1 ~ FIRST_GEN, data = firstgen_data)
+t.test(CXT2a ~ FIRST_GEN, data = firstgen_data)
+t.test(CXT2b ~ FIRST_GEN, data = firstgen_data)
+t.test(CXT3 ~ FIRST_GEN, data = firstgen_data)
+t.test(CXT4a ~ FIRST_GEN, data = firstgen_data)
+t.test(CXT4b ~ FIRST_GEN, data = firstgen_data)
+```
+
+#regression for high school gpa
+```{r}
+
+lm(CXT1 ~ HS.QPA, data = merged_data)
+summary(lm(CXT1 ~ HS.QPA, data = merged_data))
+
+summary(lm(CXT2a ~ HS.QPA, data = merged_data))
+summary(lm(CXT2b ~ HS.QPA, data = merged_data))
+summary(lm(CXT3 ~ HS.QPA, data = merged_data))
+summary(lm(CXT4a ~ HS.QPA, data = merged_data))
+summary(lm(CXT4b ~ HS.QPA, data = merged_data))
+```
+
+#anova for race
+```{r}
+table(merged_data$RACE.S.)
+summary(aov(CXT1 ~ RACE.S., data = merged_data))
+summary(aov(CXT2a ~ RACE.S., data = merged_data))
+summary(aov(CXT2b ~ RACE.S., data = merged_data))
+summary(aov(CXT3 ~ RACE.S., data = merged_data))
+summary(aov(CXT4a ~ RACE.S., data = merged_data))
+summary(aov(CXT4b ~ RACE.S., data = merged_data))
+
+TukeyHSD(aov(CXT1 ~ RACE.S., data = merged_data))
+
+TukeyHSD(aov(CXT3 ~ RACE.S., data = merged_data))
+```
+
+#multiple regression (include all demographic variables except high school gpa)
+```{r}
+merged_data$SEX <- factor(merged_data$SEX)
+merged_data$FIRST_GEN <- factor(merged_data$FIRST_GEN)
+merged_data$DomesticStatus <- factor(merged_data$DomesticStatus)
+merged_data$RACE.S. <- factor(merged_data$RACE.S.)
+
+
+merged_data$SEX[merged_data$SEX == ""] <- NA
+merged_data$FIRST_GEN[merged_data$FIRST_GEN == ""] <- NA
+merged_data$RACE.S.[merged_data$RACE.S. == ""] <- NA
+
+merged_data$SEX <- factor(merged_data$SEX)
+merged_data$FIRST_GEN <- factor(merged_data$FIRST_GEN)
+merged_data$RACE.S. <- factor(merged_data$RACE.S.)
+
+model_CXT1 <- lm(
+  CXT1 ~ SEX + FIRST_GEN + DomesticStatus + RACE.S.,
+  data = merged_data
+)
+summary(model_CXT1)
+
+model_CXT2a <- lm(
+  CXT2a ~ SEX + FIRST_GEN + DomesticStatus + RACE.S.,
+  data = merged_data
+)
+summary(model_CXT2a)
+
+model_CXT2b <- lm(
+  CXT2b ~ SEX + FIRST_GEN + DomesticStatus + RACE.S.,
+  data = merged_data
+)
+summary(model_CXT2b)
+
+model_CXT3 <- lm(
+  CXT3 ~ SEX + FIRST_GEN + DomesticStatus + RACE.S.,
+  data = merged_data
+)
+summary(model_CXT3)
+
+model_CXT4a <- lm(
+  CXT4a ~ SEX + FIRST_GEN + DomesticStatus + RACE.S.,
+  data = merged_data
+)
+summary(model_CXT4a)
+
+model_CXT4b <- lm(
+  CXT4b ~ SEX + FIRST_GEN + DomesticStatus + RACE.S.,
+  data = merged_data
+)
+summary(model_CXT4b)
+
+levels(merged_data$RACE.S.)
+
+```
+
+#multiple regression with all demographic variables
+```{r}
+model_CXT1 <- lm(
+  CXT1 ~ HS.QPA + SEX + FIRST_GEN + DomesticStatus + RACE.S.,
+  data = merged_data
+)
+summary(model_CXT1)
+
+model_CXT2a <- lm(
+  CXT2a ~ HS.QPA + SEX + FIRST_GEN + DomesticStatus + RACE.S.,
+  data = merged_data
+)
+summary(model_CXT2a)
+
+model_CXT2b <- lm(
+  CXT2b ~ HS.QPA + SEX + FIRST_GEN + DomesticStatus + RACE.S.,
+  data = merged_data
+)
+summary(model_CXT2b)
+
+model_CXT3 <- lm(
+  CXT3 ~ HS.QPA + SEX + FIRST_GEN + DomesticStatus + RACE.S.,
+  data = merged_data
+)
+summary(model_CXT3)
+
+model_CXT4a <- lm(
+  CXT4a ~ HS.QPA + SEX + FIRST_GEN + DomesticStatus + RACE.S.,
+  data = merged_data
+)
+summary(model_CXT4a)
+
+model_CXT4b <- lm(
+  CXT4b ~ HS.QPA + SEX + FIRST_GEN + DomesticStatus + RACE.S.,
+  data = merged_data
+)
+summary(model_CXT4b)
+```
+
+#standardized regression coefficients (β) - to see which variable has strongest influence on each cxts
+```{r}
+
+# Load package
+library(lm.beta)
+
+# CXT1
+model_CXT1 <- lm(
+  CXT1 ~ HS.QPA + SEX + FIRST_GEN + DomesticStatus + RACE.S.,
+  data = merged_data
+)
+
+summary(lm.beta(model_CXT1))
+
+# CXT2a
+model_CXT2a <- lm(
+  CXT2a ~ HS.QPA + SEX + FIRST_GEN + DomesticStatus + RACE.S.,
+  data = merged_data
+)
+
+summary(lm.beta(model_CXT2a))
+
+# CXT2b
+model_CXT2b <- lm(
+  CXT2b ~ HS.QPA + SEX + FIRST_GEN + DomesticStatus + RACE.S.,
+  data = merged_data
+)
+
+summary(lm.beta(model_CXT2b))
+
+# CXT3
+model_CXT3 <- lm(
+  CXT3 ~ HS.QPA + SEX + FIRST_GEN + DomesticStatus + RACE.S.,
+  data = merged_data
+)
+
+summary(lm.beta(model_CXT3))
+
+# CXT4a
+model_CXT4a <- lm(
+  CXT4a ~ HS.QPA + SEX + FIRST_GEN + DomesticStatus + RACE.S.,
+  data = merged_data
+)
+
+summary(lm.beta(model_CXT4a))
+
+# CXT4b
+model_CXT4b <- lm(
+  CXT4b ~ HS.QPA + SEX + FIRST_GEN + DomesticStatus + RACE.S.,
+  data = merged_data
+)
+
+summary(lm.beta(model_CXT4b))
+
+models <- list(
+  CXT1  = model_CXT1,
+  CXT2a = model_CXT2a,
+  CXT2b = model_CXT2b,
+  CXT3  = model_CXT3,
+  CXT4a = model_CXT4a,
+  CXT4b = model_CXT4b
+)
+
+for(i in names(models)) {
+
+  beta <- lm.beta(models[[i]])$standardized.coefficients
+
+  beta <- beta[names(beta) != "(Intercept)"]
+
+  cat("\n", i, "\n")
+  print(sort(abs(beta), decreasing = TRUE))
+}
+```
+
+#calculate average scores for each cxts
+```{r}
+library(tidyverse)
+
+cxt_means <- data.frame(
+  CXT = c("CXT1","CXT2a","CXT2b","CXT3","CXT4a","CXT4b"),
+  Mean = c(
+    mean(merged_data$CXT1, na.rm = TRUE),
+    mean(merged_data$CXT2a, na.rm = TRUE),
+    mean(merged_data$CXT2b, na.rm = TRUE),
+    mean(merged_data$CXT3, na.rm = TRUE),
+    mean(merged_data$CXT4a, na.rm = TRUE),
+    mean(merged_data$CXT4b, na.rm = TRUE)
+  )
+)
+
+ggplot(cxt_means,
+       aes(x = reorder(CXT, Mean),
+           y = Mean,
+           fill = Mean)) +
+  geom_col(width = .7) +
+  geom_text(aes(label = round(Mean,2)),
+            hjust = -0.2,
+            size = 5) +
+  coord_flip() +
+  theme_minimal(base_size = 16) +
+  labs(
+    title = "Average Scores Across CXT Dimensions",
+    x = "",
+    y = "Mean Score"
+  ) +
+  theme(legend.position = "none")
+```
+
+#heat map
+```{r}
+library(tidyverse)
+
+beta_data <- data.frame(
+  Variable = c("HS.QPA","Male","First Gen","International"),
+  CXT1  = c(0.182,0.099,0.136,-0.135),
+  CXT2a = c(0.078,0.276,0.257,0.056),
+  CXT2b = c(0.059,0.243,0.113,0.232),
+  CXT3  = c(-0.010,0.251,0.045,0.054),
+  CXT4a = c(0.225,-0.075,0.224,0.122),
+  CXT4b = c(0.001,-0.054,0.169,0.256)
+)
+
+beta_long <- pivot_longer(
+  beta_data,
+  cols = -Variable,
+  names_to = "CXT",
+  values_to = "Beta"
+)
+
+ggplot(beta_long,
+       aes(CXT, Variable, fill = Beta)) +
+  geom_tile(color = "white") +
+  geom_text(aes(label = round(Beta,2)),
+            size = 5) +
+  scale_fill_gradient2(
+    low = "#2166ac",
+    mid = "white",
+    high = "#b2182b",
+    midpoint = 0
+  ) +
+  theme_minimal(base_size = 16) +
+  labs(
+    title = "Demographic Influences Across CXT Dimensions",
+    fill = "β"
+  )
+```
+
+#Calculate the average score for each CXT dimension
+#separately for first-generation and non-first-generation students
+```{r}
+library(tidyverse)
+
+fg_data <- merged_data %>%
+  group_by(FIRST_GEN) %>%
+  summarise(
+    CXT1 = mean(CXT1, na.rm=TRUE),
+    CXT2a = mean(CXT2a, na.rm=TRUE),
+    CXT2b = mean(CXT2b, na.rm=TRUE),
+    CXT3 = mean(CXT3, na.rm=TRUE),
+    CXT4a = mean(CXT4a, na.rm=TRUE),
+    CXT4b = mean(CXT4b, na.rm=TRUE)
+  ) %>%
+  pivot_longer(
+    -FIRST_GEN,
+    names_to="CXT",
+    values_to="Score"
+  )
+
+ggplot(fg_data,
+       aes(CXT, Score,
+           fill=FIRST_GEN)) +
+  geom_col(position="dodge") +
+  theme_minimal(base_size=16) +
+  labs(
+    title="First-Generation vs Non-First-Generation Students"
+  )
+```
+
+#Create a summary table showing the strongest significantdemographic predictor for each CXT dimension based on
+#the multiple regression results
+```{r}
+sig <- data.frame(
+  CXT = c("CXT1","CXT2a","CXT2b","CXT3","CXT4a","CXT4b"),
+  Strongest = c(
+    "Race(HW)",
+    "Sex",
+    "Sex",
+    "Race(W)",
+    "HS.QPA",
+    "Citizenship"
+  )
+)
+
+ggplot(sig,
+       aes(x=CXT,
+           y=Strongest,
+           fill=Strongest)) +
+  geom_tile(color="white") +
+  geom_text(aes(label=Strongest),
+            size=5) +
+  theme_minimal(base_size=16) +
+  theme(
+    legend.position="none"
+  ) +
+  labs(
+    title="Most Influential Demographic Factor for Each CXT Dimension"
+  )
+```
+
+#Create scatterplots showing the relationship between high school GPA and each CXT dimension.
+```{r}
+
+library(tidyverse)
+
+cxt_long <- merged_data %>%
+  pivot_longer(
+    cols = c(CXT1, CXT2a, CXT2b, CXT3, CXT4a, CXT4b),
+    names_to = "CXT",
+    values_to = "Score"
+  )
+
+ggplot(cxt_long,
+       aes(x = HS.QPA, y = Score)) +
+  geom_point(alpha = .5) +
+  geom_smooth(method = "lm", se = FALSE) +
+  facet_wrap(~CXT) +
+  theme_minimal(base_size = 14) +
+  labs(
+    title = "Relationship Between High School GPA and CXT Dimensions",
+    x = "High School GPA",
+    y = "CXT Score"
+  )
+
+
+```
+
+#box plot
+```{r}
+#Compare CXT3 scores between male and female students
+boxplot(CXT3 ~ SEX,
+        data = merged_data,
+        main = "CXT3 by Gender",
+        xlab = "Gender",
+        ylab = "CXT3 Score")
+
+#Compare CXT4b scores between domestic and international students
+boxplot(CXT4b ~ DomesticStatus,
+        data = merged_data,
+        main = "CXT4b by Citizenship",
+        xlab = "Citizenship Status",
+        ylab = "CXT4b Score")
+
+#Compare CXT2a scores between first-generation and non-first-generation students
+boxplot(CXT2a ~ FIRST_GEN,
+        data = merged_data,
+        main = "CXT2a by First-Generation Status",
+        xlab = "First Generation",
+        ylab = "CXT2a Score")
+
+#Examine the relationship between high school GPA and CXT4a scores
+plot(merged_data$HS.QPA,
+     merged_data$CXT4a,
+     main = "HS GPA vs CXT4a",
+     xlab = "High School GPA",
+     ylab = "CXT4a Score")
+
+abline(lm(CXT4a ~ HS.QPA, data = merged_data),
+       col = "red",
+       lwd = 2)
+
+#Compare CXT3 scores across racial groups
+boxplot(CXT3 ~ RACE.S.,
+        data = merged_data,
+        main = "CXT3 by Race",
+        xlab = "Race",
+        ylab = "CXT3 Score")
+```
