@@ -1,0 +1,246 @@
+---
+title: "SURA CXT Analysis"
+author: "Lulu Ji"
+date: "2026-June"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r}
+library(tidyverse)
+library(readxl)
+library(tidytext)
+```
+
+
+# Load CXT scores
+```{r}
+scores_raw <- read_excel("CXT SURA Data Entry (Responses) (1).xlsx") %>%
+  rename(
+    course   = `Course Number`,
+    semester = Semester,
+    dcid     = `DCID (EX: DC1233 or DCF2456)`,
+    timing   = `Assignment (Early or Late)`,
+    type     = `Assignment Type\n(This is labeled in the data assignment spreadsheet).`,
+    coder    = Coder,
+    CXT4b    = CXT4b
+  ) %>%
+  mutate(across(CXT1:CXT4b, ~ suppressWarnings(as.numeric(.))))
+```
+
+
+# Get one score per artifact
+# Use reconciled score if available, otherwise average coders
+```{r}
+reconciled_flag <- scores_raw %>%
+  group_by(dcid, timing) %>%
+  summarise(has_reconciled = any(coder == "Reconciled Code"), .groups = "drop")
+
+scores_raw <- left_join(scores_raw, reconciled_flag, by = c("dcid", "timing"))
+
+scores_filtered <- scores_raw %>%
+  filter(
+    (has_reconciled == TRUE  & coder == "Reconciled Code") |
+    (has_reconciled == FALSE & coder != "Reconciled Code")
+  )
+
+scores_clean <- scores_filtered %>%
+  group_by(course, semester, dcid, timing, type) %>%
+  summarise(across(CXT1:CXT4b, ~ mean(.x, na.rm = TRUE)), .groups = "drop") %>%
+  mutate(CXT_avg = rowMeans(pick(CXT1, CXT2a, CXT2b, CXT3, CXT4a, CXT4b), na.rm = TRUE))
+
+cat("Artifacts after cleaning:", nrow(scores_clean), "\n")
+```
+
+
+# Average scores to course level
+```{r}
+scores_by_course <- scores_clean %>%
+  group_by(course, semester, timing) %>%
+  summarise(across(CXT1:CXT_avg, ~ mean(.x, na.rm = TRUE)),
+            n_artifacts = n(), .groups = "drop")
+```
+
+
+# Instruction data (word counts + keyword totals)
+```{r}
+instructions <- tribble(
+  ~course, ~semester, ~timing,  ~word_count, ~kw_total,
+  85221,   "F21",     "Late",   1761,        38,
+  82273,   "S22",     "Early",  1028,        33,
+  82273,   "S22",     "Late",   6724,        251,
+  82273,   "F24",     "Early",  1352,        50,
+  82273,   "F24",     "Late",   6724,        280,
+  84389,   "S25",     "Late",    629,        26,
+  84389,   "S26",     "Early",   191,         6,
+  84389,   "S26",     "Late",    191,         6,
+  82270,   "F24",     "Early",   973,        49,
+  82270,   "F24",     "Late",   2117,        83,
+  79211,   "F25",     "Early",   648,        27,
+  79211,   "F25",     "Late",    648,        27
+)
+```
+
+
+# Join scores and instructions
+```{r}
+combined <- scores_by_course %>%
+  left_join(instructions, by = c("course", "semester", "timing")) %>%
+  filter(!is.na(word_count))
+```
+
+
+# Reshape long for faceted plots
+```{r}
+scores_long <- combined %>%
+  pivot_longer(cols = c(CXT1, CXT2a, CXT2b, CXT3, CXT4a, CXT4b, CXT_avg),
+               names_to = "dimension", values_to = "avg_score") %>%
+  filter(!is.na(avg_score)) %>%
+  mutate(dimension = recode(dimension,
+    "CXT1"    = "CXT1: Question Framing",
+    "CXT2a"   = "CXT2a: Quality of Evidence",
+    "CXT2b"   = "CXT2b: Use of Evidence",
+    "CXT3"    = "CXT3: Historical Analysis",
+    "CXT4a"   = "CXT4a: Traditions of Thought",
+    "CXT4b"   = "CXT4b: Reflection",
+    "CXT_avg" = "Overall CXT Average"
+  ))
+```
+
+
+# PLOT 1: Instruction word count vs. CXT scores
+```{r}
+p1 <- ggplot(scores_long, aes(x = word_count, y = avg_score, color = timing)) +
+  geom_point(size = 3, alpha = 0.8) +
+  geom_smooth(method = "lm", se = FALSE, aes(group = 1),
+              color = "gray40", linetype = "dashed", linewidth = 0.7) +
+  facet_wrap(~ dimension, ncol = 3) +
+  scale_y_continuous(limits = c(1, 4), breaks = seq(1, 4, by = 0.5)) +
+  scale_color_manual(values = c("Early" = "#2196F3", "Late" = "#E91E63"),
+                     name = "Assignment Timing") +
+  labs(title = "Instruction Length vs. CXT Learning Outcomes",
+       x = "Instruction Word Count", y = "Average CXT Score (0–4)") +
+  theme_bw(base_size = 11) +
+  theme(strip.text = element_text(face = "bold", size = 9),
+        legend.position = "bottom",
+        plot.title = element_text(face = "bold"))
+
+ggsave("plot1_wordcount_vs_CXT.png", p1, width = 12, height = 9, dpi = 150)
+print(p1)
+```
+
+
+# PLOT 2: Keyword count vs. CXT scores
+```{r}
+p2 <- ggplot(scores_long, aes(x = kw_total, y = avg_score, color = timing)) +
+  geom_point(size = 3, alpha = 0.8) +
+  geom_smooth(method = "lm", se = FALSE, aes(group = 1),
+              color = "gray40", linetype = "dashed", linewidth = 0.7) +
+  facet_wrap(~ dimension, ncol = 3) +
+  scale_y_continuous(limits = c(1, 4), breaks = seq(1, 4, by = 0.5)) +
+  scale_color_manual(values = c("Early" = "#2196F3", "Late" = "#E91E63"),
+                     name = "Assignment Timing") +
+  labs(title = "CXT Keyword Relevance in Instructions vs. CXT Learning Outcomes",
+       x = "Total CXT Keyword Count in Instructions", y = "Average CXT Score (0–4)") +
+  theme_bw(base_size = 11) +
+  theme(strip.text = element_text(face = "bold", size = 9),
+        legend.position = "bottom",
+        plot.title = element_text(face = "bold"))
+
+ggsave("plot2_keywords_vs_CXT.png", p2, width = 12, height = 9, dpi = 150)
+print(p2)
+```
+
+
+# Correlation tests
+```{r}
+overall_only <- scores_long %>% filter(dimension == "Overall CXT Average")
+
+cor.test(overall_only$word_count, overall_only$avg_score, method = "pearson")
+cor.test(overall_only$kw_total,   overall_only$avg_score, method = "pearson")
+```
+
+
+# Binary data (has rubric, has steps)
+```{r}
+binary_data <- tribble(
+  ~course, ~semester, ~timing,  ~has_rubric, ~has_steps,
+  85221,   "F21",     "Late",   1,           1,
+  82273,   "S22",     "Early",  1,           0,
+  82273,   "S22",     "Late",   1,           1,
+  82273,   "F24",     "Early",  1,           0,
+  82273,   "F24",     "Late",   1,           1,
+  84389,   "S25",     "Late",   0,           0,
+  84389,   "S26",     "Early",  0,           0,
+  84389,   "S26",     "Late",   0,           0,
+  82270,   "F24",     "Early",  1,           1,
+  82270,   "F24",     "Late",   1,           1,
+  79211,   "F25",     "Early",  1,           0,
+  79211,   "F25",     "Late",   1,           0
+)
+```
+
+
+# Join to artifact-level scores (avoids extra averaging)
+```{r}
+scores_binary_long <- scores_clean %>%
+  left_join(binary_data, by = c("course", "semester", "timing")) %>%
+  filter(!is.na(has_rubric)) %>%
+  mutate(
+    has_rubric = factor(has_rubric, levels = c(0,1), labels = c("No Rubric", "Has Rubric")),
+    has_steps  = factor(has_steps,  levels = c(0,1), labels = c("No Steps",  "Has Steps"))
+  ) %>%
+  pivot_longer(cols = c(CXT1, CXT2a, CXT2b, CXT3, CXT4a, CXT4b),   # all 6 dimensions
+               names_to = "dimension", values_to = "score") %>%
+  filter(!is.na(score)) %>%
+  mutate(dimension = recode(dimension,
+    "CXT1"  = "CXT1: Question Framing",
+    "CXT2a" = "CXT2a: Quality of Evidence",
+    "CXT2b" = "CXT2b: Use of Evidence",
+    "CXT3"  = "CXT3: Historical Analysis",
+    "CXT4a" = "CXT4a: Traditions of Thought",
+    "CXT4b" = "CXT4b: Reflection"
+  ))
+```
+
+
+# PLOT 3: Rubric vs. CXT scores
+```{r}
+p3 <- ggplot(scores_binary_long, aes(x = has_rubric, y = score, fill = has_rubric)) +
+  geom_boxplot(alpha = 0.6, width = 0.5, outlier.shape = NA) +
+  geom_jitter(width = 0.15, size = 1.5, alpha = 0.5) +
+  facet_wrap(~ dimension, ncol = 3) +
+  scale_fill_manual(values = c("No Rubric" = "#FF7043", "Has Rubric" = "#42A5F5")) +
+  scale_y_continuous(limits = c(0, 4), breaks = seq(0, 4, by = 1)) +
+  labs(title = "Rubric in Instructions vs. CXT Scores",
+       x = "", y = "CXT Score (0–4)") +
+  theme_bw(base_size = 11) +
+  theme(legend.position = "none",
+        strip.text = element_text(face = "bold", size = 9),
+        plot.title = element_text(face = "bold"))
+
+ggsave("plot3_rubric_vs_CXT.png", p3, width = 10, height = 7, dpi = 150)
+print(p3)
+```
+
+
+# PLOT 4: Clear steps vs. CXT scores
+```{r}
+p4 <- ggplot(scores_binary_long, aes(x = has_steps, y = score, fill = has_steps)) +
+  geom_boxplot(alpha = 0.6, width = 0.5, outlier.shape = NA) +
+  geom_jitter(width = 0.15, size = 1.5, alpha = 0.5) +
+  facet_wrap(~ dimension, ncol = 3) +
+  scale_fill_manual(values = c("No Steps" = "#FF7043", "Has Steps" = "#42A5F5")) +
+  scale_y_continuous(limits = c(0, 4), breaks = seq(0, 4, by = 1)) +
+  labs(title = "Clear Steps in Instructions vs. CXT Scores",
+       x = "", y = "CXT Score (0–4)") +
+  theme_bw(base_size = 11) +
+  theme(legend.position = "none",
+        strip.text = element_text(face = "bold", size = 9),
+        plot.title = element_text(face = "bold"))
+
+ggsave("plot4_steps_vs_CXT.png", p4, width = 10, height = 7, dpi = 150)
+print(p4)
+```
+
