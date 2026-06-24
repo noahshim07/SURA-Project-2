@@ -1,0 +1,230 @@
+###Load dataset
+df <- read.csv("cxt.csv")
+
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+
+
+##Susbetting by department
+
+psych <- df |> filter(
+  Department == 'Psychology'
+) |> 
+  select(CXT1, CXT2a, CXT2b, CXT3, CXT4a, CXT4b) |> 
+  summarise(across(everything(), \(x) mean(x, na.rm = TRUE)))  |> 
+  pivot_longer(everything(), names_to = "CXT", values_to = "avg_score")
+
+
+lcal <- df |> filter(Department == 'LCAL') |> 
+  select(CXT1, CXT2a, CXT2b, CXT3, CXT4a, CXT4b) |> 
+  summarise(across(everything(), \(x) mean(x, na.rm = TRUE)))  |> 
+  pivot_longer(everything(), names_to = "CXT", values_to = "avg_score")
+
+
+english <- df |> filter(Department == 'English')|> 
+  select(CXT1, CXT2a, CXT2b, CXT3, CXT4a, CXT4b) |> 
+  summarise(across(everything(), \(x) mean(x, na.rm = TRUE)))  |> 
+  pivot_longer(everything(), names_to = "CXT", values_to = "avg_score")
+
+history <- df |> filter( Department == 'History') |> 
+  select(CXT1, CXT2a, CXT2b, CXT3, CXT4a, CXT4b) |> 
+  summarise(across(everything(), \(x) mean(x, na.rm = TRUE)))  |> 
+  pivot_longer(everything(), names_to = "CXT", values_to = "avg_score")
+
+cmist <- df |> filter( Department == 'CMIST' ) |> 
+  select(CXT1, CXT2a, CXT2b, CXT3, CXT4a, CXT4b) |> 
+  summarise(across(everything(), \(x) mean(x, na.rm = TRUE)))  |> 
+  pivot_longer(everything(), names_to = "CXT", values_to = "avg_score")
+
+business <- df |> filter( Department == 'Business' ) |> 
+  select(CXT1, CXT2a, CXT2b, CXT3, CXT4a, CXT4b) |> 
+  summarise(across(everything(), \(x) mean(x, na.rm = TRUE)))  |> 
+  pivot_longer(everything(), names_to = "CXT", values_to = "avg_score")
+
+ss <- df |> filter(Department == 'Psychology' | Department == 'CMIST')  |> 
+  select(CXT1, CXT2a, CXT2b, CXT3, CXT4a, CXT4b) |> 
+  summarise(across(everything(), \(x) mean(x, na.rm = TRUE)))  |> 
+  pivot_longer(everything(), names_to = "CXT", values_to = "avg_score")
+
+humanities <- df |> filter(Department %in% c("English", "History", "LCAL"))  |> 
+  select(CXT1, CXT2a, CXT2b, CXT3, CXT4a, CXT4b) |> 
+  summarise(across(everything(), \(x) mean(x, na.rm = TRUE)))  |> 
+  pivot_longer(everything(), names_to = "CXT", values_to = "avg_score")
+
+
+ss$discipline <- "Social Sciences"
+humanities$discipline <- "Humanities"
+combined_df_disc <- bind_rows(ss, humanities)
+
+df <- df |>
+  mutate(discipline = case_when(
+   tolower(Department) == "business" ~ NA_character_,
+   tolower (Department) %in% c("english", "history", "lcal") ~ "Humanities",
+    TRUE ~ "Social Sciences"
+  ))
+
+
+
+# Step 1: get true sample size per discipline from raw data
+n_per_disc <- df |>
+  group_by(discipline) |>
+  summarise(n_disc = n())
+
+# Step 2: join onto your combined_df_disc and create labeled legend variable
+combined_df_disc <- combined_df_disc |>
+  left_join(n_per_disc, by = "discipline") |>
+  mutate(discipline_label = paste0(discipline, " (n=", n_disc, ")"))
+
+# Step 3: plot using the new label for fill
+combined_df_disc |>
+  ggplot(aes(x = CXT, y = avg_score, fill = discipline_label)) +
+  geom_col(position = "dodge") +
+  geom_text(aes(label = round(avg_score, 2)),
+            position = position_dodge(width = 0.9),
+            vjust = -0.5, size = 3) +
+  labs(title = "Average CXT Score by Discipline",
+       x = "CXT Outcome", y = "Average Score",
+       fill = "Subject") +
+  theme_minimal()
+
+combined_df_disc |> 
+  ggplot(aes(x = CXT, y = avg_score, fill = discipline)) +
+  geom_col(position = "dodge") +
+  geom_text(aes(label = round(avg_score, 2)),
+            position = position_dodge(width = 0.9),
+            vjust = -0.5, size = 3) +
+  labs(title = "Average CXT Score by Discipline",
+       x = "CXT Outcome", y = "Average Score",
+       fill = "Subject") +
+  theme_minimal()
+
+
+
+psych$subject <- "Psychology"
+lcal$subject <- "LCAL"
+english$subject <- "English"
+history$subject <- "History"
+cmist$subject <- "CMIST"
+business$subject <- "Business"
+combined_df <- bind_rows(business, english, history, lcal, cmist, psych)
+
+
+
+
+combined_df |>
+  mutate(CXT = factor(CXT, levels = c("CXT1", "CXT2a", "CXT2b", "CXT3", "CXT4a", "CXT4b"))) |>
+  ggplot(aes(x = CXT, y = avg_score, fill = CXT)) +
+  geom_col() +
+  geom_text(aes(label = round(avg_score, 2)), vjust = 0, size = 3) +
+  facet_wrap(~ subject) +   # splits into separate panels by subject
+  labs(title = "Average CXT Score by Subject",
+       x = "CXT Outcome", y = "Average Score") +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+
+
+complete_df <- combined_df |>
+  complete(subject, CXT) |>                        # fills in missing combinations
+  mutate(missing_label = ifelse(is.na(avg_score), "N/A", NA))  # label for missing
+
+
+complete_df |>
+  mutate(CXT = factor(CXT, levels = c("CXT1", "CXT2a", "CXT2b", "CXT3", "CXT4a", "CXT4b"))) |>
+  ggplot(aes(x = CXT, y = avg_score, fill = CXT)) +
+  geom_col() +
+  geom_text(aes(label = round(avg_score, 2)), vjust = -0.5, size = 3, na.rm = TRUE) +
+  geom_label(aes(label = missing_label), y = 1.5, size = 3, na.rm = TRUE) +
+  facet_wrap(~ subject, scales = "free_x") +   # key fix
+  scale_y_continuous(limits = c(0, 4)) +
+  labs(title = "Average CXT Score by Subject",
+       x = "CXT Outcome", y = "Average Score") +
+  theme_minimal() +
+  theme(
+    legend.position = "none",
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    panel.spacing = unit(1, "lines")   # adds spacing between panels
+  )
+
+
+
+summary_df <- df |>
+  select(Department, CXT1, CXT2a, CXT2b, CXT3, CXT4a, CXT4b) |>
+  group_by(Department) |>
+  summarise(across(everything(), list(
+    mean = \(x) mean(x, na.rm = TRUE),
+    se = \(x) sd(x, na.rm = TRUE) / sqrt(sum(!is.na(x)))
+  ))) |>
+  pivot_longer(-Department,
+               names_to = c("CXT", ".value"),
+               names_sep = "_") |>
+  complete(Department, CXT) |>                        # fills in missing combinations
+  mutate(missing_label = ifelse(is.na(mean), "N/A", NA))
+
+
+# Step 1: get true sample size per department from raw data
+n_per_dept <- df|>
+  group_by(Department) |>
+  summarise(n_dept = n())
+
+# Step 2: join onto your summary_df and create labeled facet variable
+summary_df <- summary_df |>
+  left_join(n_per_dept, by = "Department") |>
+  mutate(Department_label = paste0(Department, " (n=", n_dept, ")"))
+
+# Step 3: plot using the new label
+summary_df |>
+  mutate(CXT = factor(CXT, levels = c("CXT1", "CXT2a", "CXT2b", "CXT3", "CXT4a", "CXT4b")),
+         lower = mean - 1.96 * se, #95% CI
+         upper = mean + 1.96 * se) |>
+  ggplot(aes(x = CXT, y = mean, fill = CXT)) +
+  geom_col() +
+  geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.2, color = "black") +
+  geom_text(aes(label = round(mean, 2)), vjust = -1.5, size = 3) +
+  geom_label(aes(label = missing_label), y = 1.5, size = 3, na.rm = TRUE) +
+  facet_wrap(~ Department_label, scales = "free_x") + 
+  scale_y_continuous(limits = c(0, 4)) +
+  labs(title = "Average CXT Score by Subject",
+       x = "CXT Outcome", y = "Average Score") +
+  theme_minimal() +
+  theme(
+    legend.position = "none",
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    panel.spacing = unit(1, "lines")
+  ) 
+
+
+
+
+   
+
+
+####Anova testing
+
+library(ggpubr)
+library(broom)
+
+
+aov_result <- aov(CXT1 ~ Department, data = df)
+summary(aov_result)
+
+
+
+results <- df|>
+  select(Department, CXT1, CXT2a, CXT2b, CXT3, CXT4a, CXT4b) |>
+  pivot_longer(-Department, names_to = "CXT", values_to = "score") |>
+  group_by(CXT) |>
+  do(tidy(aov(score ~ Department, data = .))) |>  # ANOVA for each CXT
+  filter(term == "Department")                     # keep only the subject row
+
+results
+results2 <- df |>
+  select(discipline, CXT1, CXT2a, CXT2b, CXT3, CXT4a, CXT4b) |>
+  pivot_longer(-discipline, names_to = "CXT", values_to = "score") |>
+  filter(!is.na(score)) |>
+  group_by(CXT) |>
+  do(tidy(t.test(score ~ discipline, data = .))) |>
+  select(CXT, estimate1, estimate2, statistic, p.value)
+
+print(results2)
