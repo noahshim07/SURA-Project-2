@@ -65,6 +65,11 @@ Do courses that are more open to AI lead to better students’ CXT outcomes?
 
 ### Information on the files in the folder
 - Contains code and data files used by Noah Shim for this research question
+- Before running the scripts, please install the following package:
+- ```{r}
+  install.packages("readxl")
+  ```
+  
 
 
 
