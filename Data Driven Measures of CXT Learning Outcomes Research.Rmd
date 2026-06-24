@@ -1,0 +1,1115 @@
+```{r}
+library(tidyverse)
+```
+
+## Reading the dataset into Rstudio ## 
+```{r}
+
+# importing the CSV file of the Data Entry into R as a data frame
+df <- read.csv("CXT SURA Data Entry (Responses) - Form Responses 1.csv")
+
+# shortening all the column names in the dataset
+names(df) <- c("timestamp", "courseNum", "semester", "DCID", "assignmentTime", "assignmentType", "cxt1", "cxt1_Comments", "cxt2a", "cxt2a_Comments", "cxt2b", "cxt2b_Comments", "cxt3", "cxt3_Comments","cxt4a", "cxt4a_Comments","cxt4b", "cxt4b_Comments","overallComments", "Coder", "numPages")
+
+# turning the course into a categorical variable
+df$courseNum <- factor(df$courseNum)
+
+```
+
+
+## Modifying the dataset (adding new columns/variables) ##
+
+```{r}
+ df <- df %>% 
+  # excluding the CXT comments columns and timestamp columns
+  select(courseNum, semester, DCID, assignmentTime, 
+          assignmentType, cxt1, cxt2a, cxt2b, cxt3, cxt4a, cxt4b, Coder, 
+          numPages) %>%
+  # adding a course discipline variable into the dataset
+  mutate(
+    
+    # Social Science for 85-221: Pricinples of Child Development and 84-389: Terrorism and Insurgency
+    # Humanities otherwise
+    courseDiscipline = ifelse(
+      courseNum %in% c("85221", "84389"), "Social Science", "Humanities")
+    
+    ) %>% 
+  
+  # grouping artifacts together by course number to add a new variable into each artifact
+  group_by(courseNum) %>% 
+  
+  # adding a variable for whether the course assigned multiple types of assignments in the semester
+  mutate(
+    # More than 1 assignment type detected for a course = 1, 0 otherwise
+    IsVaried = ifelse(n_distinct(assignmentType) > 1, 1, 0)
+  ) %>% 
+  
+  # returning back into a normal dataframe with the new columns/variables added
+  ungroup()
+```
+
+
+## Making a separate dataframe for each jointly coded course in the dataset ##
+```{r}
+# dataframe for Fall 2021 85-221 Principles of Child Development 
+F21_85221 <- df %>%
+  filter(courseNum == "85221") %>% 
+  filter(semester == "F21")  %>% 
+  # only considering the reconciled ratings of the artifacts to avoid duplicates
+  filter(Coder == "Reconciled Code") 
+
+# dataframe for Fall 2024 82-273 Japanese Culture and Society
+F24_82273 <- df %>%
+  filter(courseNum == "82273") %>% 
+  filter(semester == "F24")  %>% 
+  # only considering the reconciled ratings of the artifacts to avoid duplicates
+  filter(Coder == "Reconciled Code")  
+
+# dataframe for Spring 2025 84-389 Terrorism and Insurgency
+S25_84389 <- df %>%
+  filter(courseNum == "84389") %>% 
+  filter(semester == "S25")  %>% 
+  # only considering the reconciled ratings of the artifacts to avoid duplicates
+  filter(Coder == "Reconciled Code")
+  
+```
+
+## Making a separate dataframe for each non-jointly coded course in the dataset ##
+```{r}
+# dataframe for Spring 2022 82-273 Japanese Culture and Society
+S22_82273 <- df %>%
+  filter(courseNum == "82273") %>% 
+  filter(semester == "S22")
+
+# dataframe for Fall 2024 82-270 Technology in Japanese Culture and Society
+F24_82270 <- df %>%
+  filter(courseNum == "82270") %>% 
+  filter(semester == "F24")
+
+# dataset for Spring 2026 84-389 Terrorism and Insurgency
+S26_84389 <- df %>%
+  filter(courseNum == "84389") %>% 
+  filter(semester == "S26")  
+
+# dataset for Fall 2025 79-211 Modern Southeast Asia
+F25_79211 <- df %>%
+  filter(courseNum == "79211") %>% 
+  filter(semester == "F25")
+
+# dataset for Fall 2021 76-247 Shakespeare: Comedies & Romances
+F21_76247 <- df %>%
+  filter(courseNum == "76247") %>% 
+  filter(semester == "F21")
+```
+
+## Modifying the Dataset ##
+```{r}
+
+# reading into R the student demographics dataset
+demographics_df <- read.csv("Demographics_SURA.csv")
+
+# creating the new modified dataset with only coded artifacts from non-business courses
+# and student demographics 
+modified_df <- F21_76247 %>% # combining all individual course datasets together
+  bind_rows(F21_85221) %>% 
+  bind_rows(F24_82270) %>%
+  bind_rows(F24_82273) %>%
+  bind_rows(F25_79211) %>%
+  bind_rows(S22_82273) %>%
+  bind_rows(S25_84389) %>%
+  bind_rows(S26_84389) %>% 
+  # adding demographics info for each unique DCID
+  left_join(demographics_df, by = c("DCID" = "DCID2")) %>% 
+  rowwise %>% 
+  # creating an additional variable for specific courses and their semester
+  # to avoid mix up
+  mutate(
+    semester_courseNum = paste0(semester, "_", courseNum)
+  )
+  
+```
+
+## Creating Binary Grid Plot of the Assignment Type Given by Each Course ##
+
+```{r}
+
+# dataframe for setting binary grid plot
+course_assignment_binary <- modified_df %>%
+  # keep only one artifact from each course and their assignment type
+  distinct(semester_courseNum, assignmentType) %>% 
+   # add a new variable that checks if there is an early and/or late assignment
+  # assigned by a course
+  mutate(Assigned = TRUE) %>% 
+  # turns the missing values of assignment time into FALSE for the assigned variable
+  complete(semester_courseNum, assignmentType = c("Short Paper", "Reflection", "Final Paper"), fill = list(Assigned = FALSE))
+
+ggplot(course_assignment_binary, aes(x = assignmentType, y = semester_courseNum, fill = Assigned)) +
+  # tile plot
+  geom_tile(color = "black", lwd = 1) + 
+  
+  # color specification
+  scale_fill_manual(
+    values = c("TRUE" = "green", "FALSE" = "red"), # Pop of orange vs clean gray
+    labels = c("No", "Yes"),
+    name = "Analyzed?"
+  ) +
+  
+  # changing the labels of each course into their course names + course discipline
+  scale_y_discrete(
+    limits = c("F21_76247", "S22_82273" ,"F24_82270", "F24_82273", "F25_79211", 
+               "F21_85221", "S25_84389", "S26_84389"),
+    labels = c("F21 76-247 Shakespeare: Comedies & Romances 
+               (Humanities)", 
+               "S22 82-273 Japanese Culture and Society
+               (Humanities)",
+               "F24 82-270 Technology in Japanese Culture and Society
+               (Humanities)",
+               "F24 82-273 Japanese Culture and Society
+               (Humanities)",
+               "F25 79-211 Modern Southeast Asia
+               (Humanities)",
+               "F21 85-211 Principles of Child Development
+               (Social Science)",
+               "S25 84-389 Terrorism and Insurgency
+               (Social Science)", 
+               "S26 84-389 Terrorism and Insurgency
+               (Social Science)") 
+  ) +
+  
+  labs(title = "Type of Assignment Analyzed for Each Course", x = NULL, y = NULL) +
+  
+  # removes gray background
+  theme_minimal()
+
+```
+
+## Creating Binary Grid Plot of the Assignment Time Given by Each Course ##
+
+```{r}
+# dataframe for setting binary grid plot
+course_assignment_binary <- modified_df %>%
+  # keep only one artifact from each course and their assignment time
+  distinct(semester_courseNum, assignmentTime) %>% 
+  # add a new variable that checks if there is an early and/or late assignment
+  # assigned by a course
+  mutate(Assigned = TRUE) %>% 
+  # turns the missing values of assignment time into FALSE for the assigned variable
+  complete(semester_courseNum, assignmentTime = c("Early", "Late"), fill = list(Assigned = FALSE))
+
+ggplot(course_assignment_binary, aes(x = assignmentTime, y = semester_courseNum, fill = Assigned)) +
+  # tile plot
+  geom_tile(color = "black", lwd = 1) + 
+  
+  # color specification
+  scale_fill_manual(
+    values = c("TRUE" = "green", "FALSE" = "red"), # Pop of orange vs clean gray
+    labels = c("No", "Yes"),
+    name = "Analyzed?"
+  ) +
+  
+  # changing the labels of each course into their course names + course discipline
+  scale_y_discrete(
+    limits = c("F21_76247", "S22_82273" ,"F24_82270", "F24_82273", "F25_79211", 
+               "F21_85221", "S25_84389", "S26_84389"),
+    labels = c("F21 76-247 Shakespeare: Comedies & Romances 
+               (Humanities)", 
+               "S22 82-273 Japanese Culture and Society
+               (Humanities)",
+               "F24 82-270 Technology in Japanese Culture and Society
+               (Humanities)",
+               "F24 82-273 Japanese Culture and Society
+               (Humanities)",
+               "F25 79-211 Modern Southeast Asia
+               (Humanities)",
+               "F21 85-211 Principles of Child Development
+               (Social Science)",
+               "S25 84-389 Terrorism and Insurgency
+               (Social Science)", 
+               "S26 84-389 Terrorism and Insurgency
+               (Social Science)") 
+  ) +
+  
+  labs(title = "Time of Assignment Analyzed for Each Course", x = NULL, y = NULL) +
+  
+  # removes gray background
+  theme_minimal()
+
+```
+
+### Boxplot for the number of pages for each assignment type ###
+
+```{r}
+ggplot(modified_df, aes(x = assignmentType, y = numPages, fill = courseDiscipline)) +
+  # boxplot
+  geom_boxplot(color = "black", outlier.color = "red") +
+  
+  # ticks for the y-axis
+  scale_y_continuous(breaks = seq(0, 26, by = 2)) +
+  
+  labs(title = "Number of Pages By Assignment Type",
+       x = NULL,
+       y = "Number of Pages") +
+  theme_minimal() +
+  
+  theme(legend.position = "right") +
+  
+  # Legend Title and Description
+  scale_fill_brewer(palette = "Pastel1", name = "Course Discipline", 
+                    labels = c("Humanities (5 courses)", 
+                               "Social Science (3 courses)"))
+```
+
+### Boxplot for the number of pages for each assignment time ###
+
+```{r}
+ggplot(modified_df, aes(x = assignmentTime, y = numPages, fill = courseDiscipline)) +
+  # boxplot
+  geom_boxplot(color = "black", outlier.color = "red") +
+  
+  # ticks for the y-axis
+  scale_y_continuous(breaks = seq(0, 26, by = 2)) +
+  
+  labs(title = "Number of Pages By Assignment Time",
+       x = NULL,
+       y = "Number of Pages") +
+  
+  theme_minimal() +
+  
+  theme(legend.position = "right") +
+  
+  # Legend Titles and Description
+  scale_fill_brewer(palette = "Pastel1", name = "Course Discipline", 
+                    labels = c("Humanities (5 courses)", 
+                               "Social Science (3 courses)"))
+```
+
+## Looking at the relationship between Assignment Type and CXT Ratings ## 
+## for Each CXT Learning Outcome ##
+
+```{r}
+# Dataset with the mean rating, standard deviation of the rating, 
+# and number of artifacts for each CXT learning outcome by Assignment Type 
+
+# CXT 1 #
+cxt1_mean <- modified_df %>% 
+  # filtering out all missing values for NAs/ artifacts where CXT 1 wasn't coded
+  filter(!is.na(cxt1)) %>% 
+  # grouping by assignment type (main grouping) and course discipline (subgrouping)
+  group_by(assignmentType, courseDiscipline) %>% 
+  summarize(
+    meanRating = mean(cxt1), # average CXT 1 rating
+    se = sd(cxt1) / sqrt(n()), # standard deviation of CXT 1 rating
+    count = n() # number of artifacts in each assignment type for each course discipline
+  )
+
+# CXT 2a # 
+cxt2a_mean <- modified_df %>% 
+  # filtering out all missing values for NAs/ artifacts where CXT 2a wasn't coded
+  filter(!is.na(cxt2a)) %>% 
+  # grouping by assignment type (main grouping) and course discipline (subgrouping)
+  group_by(assignmentType, courseDiscipline) %>% 
+  summarize(
+    meanRating = mean(cxt2a), # average CXT 2a rating
+    se = sd(cxt2a) / sqrt(n()), # standard deviation of CXT 2a rating
+    count = n() # number of artifacts in each assignment type for each course discipline
+  )
+
+# CXT 2b #
+cxt2b_mean <- modified_df %>%
+  # filtering out all missing values for NAs/ artifacts where CXT 2b wasn't coded
+  filter(!is.na(cxt2b)) %>% 
+  # grouping by assignment type (main grouping) and course discipline (subgrouping)
+  group_by(assignmentType, courseDiscipline) %>% 
+  summarize(
+    meanRating = mean(cxt2b), # average CXT 2b rating
+    se = sd(cxt2b) / sqrt(n()), # standard deviation of CXT 2b rating
+    count = n() # number of artifacts in each assignment type for each course discipline
+  )
+
+# CXT 3 #
+cxt3_mean <- modified_df %>% 
+  # filtering out all missing values for NAs/ artifacts where CXT 3 wasn't coded
+  filter(!is.na(cxt3)) %>% 
+  # grouping by assignment type (main grouping) and course discipline (subgrouping)
+  group_by(assignmentType, courseDiscipline) %>% 
+  summarize(
+    meanRating = mean(cxt3), # average CXT 3 rating
+    se = sd(cxt3) / sqrt(n()), # standard deviation of CXT 3 rating
+    count = n() # number of artifacts in each assignment type for each course discipline
+  )
+
+# CXT 4a #
+cxt4a_mean <- modified_df %>%
+  # filtering out all missing values for NAs/ artifacts where CXT 4a wasn't coded
+  filter(!is.na(cxt4a)) %>% 
+  # grouping by assignment type (main grouping) and course discipline (subgrouping)
+  group_by(assignmentType, courseDiscipline) %>% 
+  summarize(
+    meanRating = mean(cxt4a), # average CXT 4a rating
+    se = sd(cxt4a) / sqrt(n()), # standard deviation of CXT 4a rating
+    count = n() # number of artifacts in each assignment type for each course discipline
+  )
+
+# CXT 4b #
+cxt4b_mean <- modified_df %>% 
+  # filtering out all missing values for NAs/ artifacts where CXT 4b wasn't coded
+  filter(!is.na(cxt4b)) %>% 
+  # grouping by assignment type (main grouping) and course discipline (subgrouping)
+  group_by(assignmentType, courseDiscipline) %>% 
+  summarize(
+    meanRating = mean(cxt4b), # average CXT 4b rating
+    se = sd(cxt4b) / sqrt(n()), # standard deviation of CXT 4b rating
+    count = n() # number of artifacts in each assignment type for each course discipline
+  )
+```
+
+
+### Bar Graph of the Ratings for Each CXT Learning Outcome by Assignment Type ###
+
+#### CXT1 ####
+
+```{r}
+ggplot(cxt1_mean, aes(x = assignmentType, y = meanRating, fill = courseDiscipline)) +
+  # bar graph
+  geom_bar(stat = "identity", position = position_dodge(width = 0.8), color = "black", width = 0.7) +
+  
+  # 95% confidence intervals for each course discipline
+  geom_errorbar(aes(ymin = meanRating - 2*se, ymax = meanRating + 2*se), position = position_dodge(width = 0.8), width = 0.2) +
+  
+  # adding the confidence interval range for CXT rating as a label
+  geom_text(
+    aes(label = paste0(round(meanRating, 2), " ± ", round(2 * se, 2)), 
+        y = meanRating + 2 * se), 
+    position = position_dodge(width = 0.8), 
+    vjust = -0.8, size = 3.5
+  ) +
+  
+  # adding the number of artifacts coded for CXT 1 in each course discipline 
+  geom_text(
+    aes(label = paste0("N = ", count), 
+        y = meanRating / 2),
+    position = position_dodge(width = 0.8), 
+    vjust = -0.8
+  ) +
+  
+  labs(title = "Average CXT1 Rating by Assignment Type",
+       subtitle = "CXT1: Frame and reframe fundamental questions (who, what, where, when, why, and how) in order to interpret issues, objects, events, etc. ",
+       x = NULL,
+       y = "Rating (scale of 0-4)", 
+       fill = "Course Discipline") +
+  
+  # removes gray background
+  theme_minimal() +
+  
+  theme(legend.position = "right") +
+  
+  # Legend Titles and Description
+  scale_fill_brewer(palette = "Pastel1", name = "Course Discipline", 
+                    labels = c("Humanities (5 courses)", 
+                               "Social Science (3 courses)")) + 
+  
+  ylim(0, 4)
+  
+```
+
+#### CXT2a ####
+
+```{r}
+ggplot(cxt2a_mean, aes(x = assignmentType, y = meanRating, fill = courseDiscipline)) +
+  # bar graph
+  geom_bar(stat = "identity", position = position_dodge(width = 0.8), color = "black", width = 0.7) +
+  
+  # 95% confidence intervals for each course discipline
+  geom_errorbar(aes(ymin = meanRating - 2*se, ymax = meanRating + 2*se), position = position_dodge(width = 0.8), width = 0.2) +
+  
+  # adding the confidence interval range for CXT rating as a label
+  geom_text(
+    aes(label = paste0(round(meanRating, 2), " ± ", round(2 * se, 2)), 
+        y = meanRating + 2 * se), 
+    position = position_dodge(width = 0.8), 
+    vjust = -0.8, size = 3.5
+  ) +
+  
+  # adding the number of artifacts coded for CXT 2a in each course discipline
+  geom_text(
+    aes(label = paste0("N = ", count), 
+        y = meanRating / 2),
+    position = position_dodge(width = 0.8), 
+    vjust = -0.8
+  ) +
+  
+  labs(title = "Mean CXT2a Rating by Assignment Type",
+       subtitle = "CXT2a: Select quality materials that enrich inquiry, such as archival records, media sources, literary texts, letters, journals, official documents, images, etc.",
+       x = NULL,
+       y = "Rating (scale of 0-4)", 
+       fill = "Course Discipline") +
+  
+  # removes gray background
+  theme_minimal() +
+  
+  theme(legend.position = "right") +
+  
+  # Legend Titles and Description
+  scale_fill_brewer(palette = "Pastel1", name = "Course Discipline", 
+                    labels = c("Humanities (5 courses)", 
+                               "Social Science (3 courses)")) + 
+  
+  ylim(0, 4)
+  
+```
+
+#### CXT2b ####
+
+```{r}
+ggplot(cxt2b_mean, aes(x = assignmentType, y = meanRating, fill = courseDiscipline)) +
+  # bar graph
+  geom_bar(stat = "identity", position = position_dodge(width = 0.8), color = "black", width = 0.7) +
+  
+  # 95% confidence intervals for each course discipline
+  geom_errorbar(aes(ymin = meanRating - 2*se, ymax = meanRating + 2*se), position = position_dodge(width = 0.8), width = 0.2) +
+  
+  # adding the confidence interval range for CXT rating as a label
+  geom_text(
+    aes(label = paste0(round(meanRating, 2), " ± ", round(2 * se, 2)), 
+        y = meanRating + 2 * se), 
+    position = position_dodge(width = 0.8), 
+    vjust = -0.8, size = 3.5
+  ) +
+  
+  # adding the number of artifacts coded for CXT 2b in each course discipline
+  geom_text(
+    aes(label = paste0("N = ", count), 
+        y = meanRating / 2),
+    position = position_dodge(width = 0.8), 
+    vjust = -0.8
+  ) +
+  
+  labs(title = "Mean CXT2b Rating by Assignment Type",
+       subtitle = "CXT2b: Use and interpret evidence from source materials transparently and strategically to support major points.",
+       x = NULL,
+       y = "Rating (scale of 0-4)", 
+       fill = "Course Discipline") +
+  
+  # removes gray background
+  theme_minimal() +
+  
+  theme(legend.position = "right") +
+  
+  # Legend Titles and Description
+  scale_fill_brewer(palette = "Pastel1", name = "Course Discipline", 
+                    labels = c("Humanities (5 courses)", 
+                               "Social Science (3 courses)")) + 
+  
+  ylim(0, 4)
+```
+
+#### CXT3 ####
+
+```{r}
+ggplot(cxt3_mean, aes(x = assignmentType, y = meanRating, fill = courseDiscipline)) +
+  # bar graph
+  geom_bar(stat = "identity", position = position_dodge(width = 0.8), color = "black", width = 0.7) +
+  
+  # 95% confidence intervals for each course discipline
+  geom_errorbar(aes(ymin = meanRating - 2*se, ymax = meanRating + 2*se), position = position_dodge(width = 0.8), width = 0.2) +
+  
+  # adding the confidence interval range for CXT rating as a label
+  geom_text(
+    aes(label = paste0(round(meanRating, 2), " ± ", round(2 * se, 2)), 
+        y = meanRating + 2 * se), 
+    position = position_dodge(width = 0.8), 
+    vjust = -0.8, size = 3.5
+  ) +
+  
+  # adding the number of artifacts coded for CXT 3 in each course discipline
+  geom_text(
+    aes(label = paste0("N = ", count), 
+        y = meanRating / 2),
+    position = position_dodge(width = 0.8), 
+    vjust = -0.8
+  ) +
+  
+  labs(title = "Mean CXT3 Rating by Assignment Type",
+       subtitle = "CXT3: Analyze issues, objects, and events by interpreting these in relation to phenomena beyond the recent past (i.e. past twenty years).",
+       x = NULL,
+       y = "Rating (scale of 0-4)", 
+       fill = "Course Discipline") +
+  
+  # removes gray background
+  theme_minimal() +
+  
+  theme(legend.position = "right") +
+  
+  # Legend Titles and Description
+  scale_fill_brewer(palette = "Pastel1", name = "Course Discipline", 
+                    labels = c("Humanities (5 courses)", 
+                               "Social Science (3 courses)")) + 
+  
+  ylim(0, 4)
+```
+
+#### CXT4a ####
+
+```{r}
+ggplot(cxt4a_mean, aes(x = assignmentType, y = meanRating, fill = courseDiscipline)) +
+  # bar graph
+  geom_bar(stat = "identity", position = position_dodge(width = 0.8), color = "black", width = 0.7) +
+  
+  # 95% confidence intervals for each course discipline
+  geom_errorbar(aes(ymin = meanRating - 2*se, ymax = meanRating + 2*se), position = position_dodge(width = 0.8), width = 0.2) +
+  
+  # adding the confidence interval range for CXT rating as a label
+  geom_text(
+    aes(label = paste0(round(meanRating, 2), " ± ", round(2 * se, 2)), 
+        y = meanRating + 2 * se), 
+    position = position_dodge(width = 0.8), 
+    vjust = -0.8, size = 3.5
+  ) +
+  
+  # adding the number of artifacts coded for CXT 4a in each course discipline
+  geom_text(
+    aes(label = paste0("N = ", count), 
+        y = meanRating / 2),
+    position = position_dodge(width = 0.8), 
+    vjust = -0.8
+  ) +
+  
+  labs(title = "Mean CXT4a Rating by Assignment Type",
+       subtitle = "CXT4a: Consider how ways of thinking developed over time.",
+       x = NULL,
+       y = "Rating (scale of 0-4)", 
+       fill = "Course Discipline") +
+  
+  # removes gray background
+  theme_minimal() +
+  
+  theme(legend.position = "right") +
+  
+  # Legend Titles and Description
+  scale_fill_brewer(palette = "Pastel1", name = "Course Discipline", 
+                    labels = c("Humanities (5 courses)", 
+                               "Social Science (3 courses)")) + 
+  
+  ylim(0, 4)
+```
+
+#### CXT4b ####
+
+```{r}
+ggplot(cxt4b_mean, aes(x = assignmentType, y = meanRating, fill = courseDiscipline)) +
+  # bar graph
+  geom_bar(stat = "identity", position = position_dodge(width = 0.8), color = "black", width = 0.7) +
+  
+  # 95% confidence intervals for each course discipline
+  geom_errorbar(aes(ymin = meanRating - 2*se, ymax = meanRating + 2*se), position = position_dodge(width = 0.8), width = 0.2) +
+  
+  # adding the confidence interval range for CXT rating as a label
+  geom_text(
+    aes(label = paste0(round(meanRating, 2), " ± ", round(2 * se, 2)), 
+        y = meanRating + 2 * se), 
+    position = position_dodge(width = 0.8), 
+    vjust = -0.8, size = 3.5
+  ) +
+  
+  # adding the number of artifacts coded for CXT 4a in each course discipline
+  geom_text(
+    aes(label = paste0("N = ", count), 
+        y = meanRating / 2),
+    position = position_dodge(width = 0.8), 
+    vjust = -0.8
+  ) +
+  
+  labs(title = "Mean CXT4b Rating by Assignment Type",
+       subtitle = "CXT4b: The student articulates their own way of thinking in the context of normative thinking traditions.",
+       x = NULL,
+       y = "Rating (scale of 0-4)", 
+       fill = "Course Discipline") +
+  
+  # removes gray background
+  theme_minimal() +
+  
+  theme(legend.position = "right") +
+  
+  # Legend Titles and Description
+  scale_fill_brewer(palette = "Pastel1", name = "Course Discipline", 
+                    labels = c("Humanities (5 courses)", 
+                               "Social Science (3 courses)")) + 
+  
+  ylim(0, 4)
+```
+
+## Looking at the Relationship between Early vs. Late Assignment for Each CXT Learning Outcome ##
+
+```{r}
+# Dataset with the mean rating, standard deviation of the rating, and 
+# number of artifacts for each CXT learning outcome by Assignment Time
+
+# CXT 1 #
+cxt1_early_late <- modified_df %>% 
+  # filtering out all missing values for NAs/ artifacts where CXT 1 wasn't coded
+  filter(!is.na(cxt1)) %>% 
+  # grouping by assignment time (main grouping) and course discipline (subgrouping)
+  group_by(assignmentTime, courseDiscipline) %>% 
+  summarize(
+    meanRating = mean(cxt1), # average CXT 1 rating
+    se = sd(cxt1) / sqrt(n()), # standard deviation of CXT 1 rating
+    count = n() # number of artifacts in each assignment time for each course discipline
+  )
+
+# CXT 2a # 
+cxt2a_early_late <- modified_df %>% 
+  # filtering out all missing values for NAs/ artifacts where CXT 2a wasn't coded
+  filter(!is.na(cxt2a)) %>% 
+  # grouping by assignment time (main grouping) and course discipline (subgrouping)
+  group_by(assignmentTime, courseDiscipline) %>% 
+  summarize(
+    meanRating = mean(cxt2a), # average CXT 2a rating
+    se = sd(cxt2a) / sqrt(n()), # standard deviation of CXT 2a rating
+    count = n() # number of artifacts in each assignment time for each course discipline
+  )
+
+# CXT 2b #
+cxt2b_mean <- modified_df %>%
+  # filtering out all missing values for NAs/ artifacts where CXT 2b wasn't coded
+  filter(!is.na(cxt2b)) %>% 
+  # grouping by assignment time (main grouping) and course discipline (subgrouping)
+  group_by(assignmentTime, courseDiscipline) %>% 
+  summarize(
+    meanRating = mean(cxt2b), # average CXT 2b rating
+    se = sd(cxt2b) / sqrt(n()), # standard deviation of CXT 2b rating
+    count = n() # number of artifacts in each assignment time for each course discipline
+  )
+
+# CXT 3 #
+cxt3_early_late <- modified_df %>% 
+  # filtering out all missing values for NAs/ artifacts where CXT 3 wasn't coded
+  filter(!is.na(cxt3)) %>% 
+  # grouping by assignment time (main grouping) and course discipline (subgrouping)
+  group_by(assignmentTime, courseDiscipline) %>% 
+  summarize(
+    meanRating = mean(cxt3), # average CXT 3 rating
+    se = sd(cxt3) / sqrt(n()), # standard deviation of CXT 3 rating
+    count = n() # number of artifacts in each assignment time for each course discipline
+  )
+
+# CXT 4a #
+cxt4a_early_late <- modified_df %>%
+  # filtering out all missing values for NAs/ artifacts where CXT 4a wasn't coded
+  filter(!is.na(cxt4a)) %>% 
+  # grouping by assignment time (main grouping) and course discipline (subgrouping)
+  group_by(assignmentTime, courseDiscipline) %>% 
+  summarize(
+    meanRating = mean(cxt4a), # average CXT 4a rating
+    se = sd(cxt4a) / sqrt(n()), # standard deviation of CXT 4a rating
+    count = n() # number of artifacts in each assignment time for each course discipline
+  )
+
+# CXT 4b #
+cxt4b_early_late <- modified_df %>% 
+  # filtering out all missing values for NAs/ artifacts where CXT 4b wasn't coded
+  filter(!is.na(cxt4b)) %>% 
+  # grouping by assignment time (main grouping) and course discipline (subgrouping)
+  group_by(assignmentTime, courseDiscipline) %>% 
+  summarize(
+    meanRating = mean(cxt4b), # average CXT 4b rating
+    se = sd(cxt4b) / sqrt(n()), # standard deviation of CXT 4b rating
+    count = n() # number of artifacts in each assignment time for each course discipline
+  )
+
+```
+
+### Bar Graph of the Ratings for Each CXT Learning Outcome by Assignment Time ###
+
+#### CXT 1 ####
+
+```{r}
+ggplot(cxt1_early_late, aes(x = assignmentTime, y = meanRating, fill = courseDiscipline)) +
+  # bar graph
+  geom_bar(stat = "identity", position = position_dodge(width = 0.8), color = "black", width = 0.7) +
+  
+  # 95% confidence intervals for each course discipline
+  geom_errorbar(aes(ymin = meanRating - 2*se, ymax = meanRating + 2*se), position = position_dodge(width = 0.8), width = 0.2) +
+  
+  # adding the confidence interval range for CXT rating as a label
+  geom_text(
+    aes(label = paste0(round(meanRating, 2), " ± ", round(2 * se, 2)), 
+        y = meanRating + 2 * se), 
+    position = position_dodge(width = 0.8), 
+    vjust = -0.8, size = 3.5
+  ) +
+  
+  # adding the number of artifacts coded for CXT 1 in each course discipline
+  geom_text(
+    aes(label = paste0("N = ", count), 
+        y = meanRating / 2),
+    position = position_dodge(width = 0.8), 
+    vjust = -0.8
+  ) +
+  
+  labs(title = "Mean CXT1 Rating by Assignment Time",
+       subtitle = "CXT1: Frame and reframe fundamental questions (who, what, where, when, why, and how) in order to interpret issues, objects, events, etc.",
+       x = NULL,
+       y = "Rating (scale of 0-4)", 
+       fill = "Course Discipline") +
+  
+  # removes gray background
+  theme_minimal() +
+  
+  theme(legend.position = "right") +
+  
+  # Legend Titles and Description
+  scale_fill_brewer(palette = "Pastel1", name = "Course Discipline", 
+                    labels = c("Humanities (5 courses)", 
+                               "Social Science (3 courses)")) + 
+  
+  ylim(0, 4)
+  
+```
+
+
+```{r}
+ggplot(cxt2a_early_late, aes(x = assignmentTime, y = meanRating, fill = courseDiscipline)) +
+  # bar graph
+  geom_bar(stat = "identity", position = position_dodge(width = 0.8), color = "black", width = 0.7) +
+  
+  # 95% confidence intervals for each course discipline
+  geom_errorbar(aes(ymin = meanRating - 2*se, ymax = meanRating + 2*se), position = position_dodge(width = 0.8), width = 0.2) +
+  
+  # adding the confidence interval range for CXT rating as a label
+  geom_text(
+    aes(label = paste0(round(meanRating, 2), " ± ", round(2 * se, 2)), 
+        y = meanRating + 2 * se), 
+    position = position_dodge(width = 0.8), 
+    vjust = -0.8, size = 3.5
+  ) +
+  
+   # adding the number of artifacts coded for CXT 2a in each course discipline
+  geom_text(
+    aes(label = paste0("N = ", count), 
+        y = meanRating / 2),
+    position = position_dodge(width = 0.8), 
+    vjust = -0.8
+  ) +
+  
+  labs(title = "Mean CXT2a Rating by Assignment Time",
+       subtitle = "CXT2a: Select quality materials that enrich inquiry, such as archival records, media sources, literary texts, letters, journals, official documents, images, etc.",
+       x = NULL,
+       y = "Rating (scale of 0-4)", 
+       fill = "Course Discipline") +
+  
+  # removes gray background
+  theme_minimal() +
+  
+  theme(legend.position = "right") +
+  
+  # Legend Titles and Description
+  scale_fill_brewer(palette = "Pastel1", name = "Course Discipline", 
+                    labels = c("Humanities (5 courses)", 
+                               "Social Science (3 courses)")) + 
+  
+  ylim(0, 4)
+  
+```
+
+
+```{r}
+ggplot(cxt2b_early_late, aes(x = assignmentTime, y = meanRating, fill = courseDiscipline)) +
+  # bar graph
+  geom_bar(stat = "identity", position = position_dodge(width = 0.8), color = "black", width = 0.7) +
+  
+  # 95% confidence intervals for each course discipline
+  geom_errorbar(aes(ymin = meanRating - 2*se, ymax = meanRating + 2*se), position = position_dodge(width = 0.8), width = 0.2) +
+  
+  # adding the confidence interval range for CXT rating as a label
+  geom_text(
+    aes(label = paste0(round(meanRating, 2), " ± ", round(2 * se, 2)), 
+        y = meanRating + 2 * se), 
+    position = position_dodge(width = 0.8), 
+    vjust = -0.8, size = 3.5
+  ) +
+  
+  # adding the number of artifacts coded for CXT 2b in each course discipline
+  geom_text(
+    aes(label = paste0("N = ", count), 
+        y = meanRating / 2),
+    position = position_dodge(width = 0.8), 
+    vjust = -0.8
+  ) +
+  
+  labs(title = "Average CXT2b Rating by Assignment Time",
+       subtitle = "CXT2b: Use and interpret evidence from source materials transparently and strategically to support major points.",
+       x = NULL,
+       y = "Rating (scale of 0-4)", 
+       fill = "Course Discipline") +
+  
+  # removes gray background
+  theme_minimal() +
+  
+  theme(legend.position = "right") +
+  
+  # Legend Titles and Description
+  scale_fill_brewer(palette = "Pastel1", name = "Course Discipline", 
+                    labels = c("Humanities (5 courses)", 
+                               "Social Science (3 courses)")) + 
+  
+  ylim(0, 4)
+  
+```
+
+
+```{r}
+ggplot(cxt3_early_late, aes(x = assignmentTime, y = meanRating, fill = courseDiscipline)) +
+  # bar graph
+  geom_bar(stat = "identity", position = position_dodge(width = 0.8), color = "black", width = 0.7) +
+  
+  
+  # 95% confidence intervals for each course discipline
+  geom_errorbar(aes(ymin = meanRating - 2*se, ymax = meanRating + 2*se), position = position_dodge(width = 0.8), width = 0.2) +
+  
+  # adding the confidence interval range for CXT rating as a label
+  geom_text(
+    aes(label = paste0(round(meanRating, 2), " ± ", round(2 * se, 2)), 
+        y = meanRating + 2 * se), 
+    position = position_dodge(width = 0.8), 
+    vjust = -0.8, size = 3.5
+  ) +
+  
+  # adding the number of artifacts coded for CXT 3 in each course discipline
+  geom_text(
+    aes(label = paste0("N = ", count), 
+        y = meanRating / 2),
+    position = position_dodge(width = 0.8), 
+    vjust = -0.8
+  ) +
+  
+  labs(title = "Mean CXT3 Rating by Assignment Time",
+       subtitle = "CXT3: Analyze issues, objects, and events by interpreting these in relation to phenomena beyond the recent past (i.e. past twenty years)",
+       x = NULL,
+       y = "Rating (scale of 0-4)", 
+       fill = "Course Discipline") +
+  
+  # removes gray background
+  theme_minimal() +
+  
+  theme(legend.position = "right") +
+  
+  # Legend Titles and Description
+  scale_fill_brewer(palette = "Pastel1", name = "Course Discipline", 
+                    labels = c("Humanities (5 courses)", 
+                               "Social Science (3 courses)")) + 
+  
+  ylim(0, 4)
+```
+
+
+```{r}
+ggplot(cxt4a_early_late, aes(x = assignmentTime, y = meanRating, fill = courseDiscipline)) +
+  # bar graph
+  geom_bar(stat = "identity", position = position_dodge(width = 0.8), color = "black", width = 0.7) +
+  
+  # 95% confidence intervals for each course discipline
+  geom_errorbar(aes(ymin = meanRating - 2*se, ymax = meanRating + 2*se), position = position_dodge(width = 0.8), width = 0.2) +
+  
+  # adding the confidence interval range for CXT rating as a label
+  geom_text(
+    aes(label = paste0(round(meanRating, 2), " ± ", round(2 * se, 2)), 
+        y = meanRating + 2 * se), 
+    position = position_dodge(width = 0.8), 
+    vjust = -0.8, size = 3.5
+  ) +
+  
+  # adding the number of artifacts coded for CXT 4a in each course discipline
+  geom_text(
+    aes(label = paste0("N = ", count), 
+        y = meanRating / 2),
+    position = position_dodge(width = 0.8), 
+    vjust = -0.8
+  ) +
+  
+  labs(title = "Mean CXT4a Rating by Assignment Time",
+       subtitle = "CXT4a: Consider how ways of thinking developed over time.",
+       x = NULL,
+       y = "Rating (scale of 0-4)", 
+       fill = "Course Discipline") +
+  
+  # removes gray background
+  theme_minimal() +
+  
+  theme(legend.position = "right") +
+  
+  # Legend Titles and Description
+  scale_fill_brewer(palette = "Pastel1", name = "Course Discipline", 
+                    labels = c("Humanities (5 courses)", 
+                               "Social Science (3 courses)")) + 
+  
+  ylim(0, 4)
+  
+```
+
+
+```{r}
+ggplot(cxt4b_early_late, aes(x = assignmentTime, y = meanRating, fill = courseDiscipline)) +
+  # bar graph
+  geom_bar(stat = "identity", position = position_dodge(width = 0.8), color = "black", width = 0.7) +
+  
+  # 95% confidence intervals for each course discipline
+  geom_errorbar(aes(ymin = meanRating - 2*se, ymax = meanRating + 2*se), position = position_dodge(width = 0.8), width = 0.2) +
+  
+  # adding the confidence interval range for CXT rating as a label
+  geom_text(
+    aes(label = paste0(round(meanRating, 2), " ± ", round(2 * se, 2)), 
+        y = meanRating + 2 * se), 
+    position = position_dodge(width = 0.8), 
+    vjust = -0.8, size = 3.5
+  ) +
+  
+  # adding the number of artifacts coded for CXT 4b in each course discipline
+  geom_text(
+    aes(label = paste0("N = ", count), 
+        y = meanRating / 2),
+    position = position_dodge(width = 0.8), 
+    vjust = -0.8
+  ) +
+  
+  labs(title = "Mean CXT4b Rating by Assignment Time",
+       subtitle = "CXT4b: The student articulates their own way of thinking in the context of normative thinking traditions",
+       x = NULL,
+       y = "Rating (scale of 0-4)", 
+       fill = "Course Discipline") +
+  
+  # removes gray background
+  theme_minimal() +
+  
+  theme(legend.position = "right") +
+  
+  # Legend Titles and Description
+  scale_fill_brewer(palette = "Pastel1", name = "Course Discipline", 
+                    labels = c("Humanities (5 courses)", 
+                               "Social Science (3 courses)")) + 
+  
+  ylim(0, 4)
+  
+```
+## Checking Correlation between Assignment Type and Assignment Time ##
+## using Chi-Square Test ## 
+
+```{r}
+print(chisq.test(table(modified_df$assignmentType, modified_df$assignmentTime)))
+```
+## Multiple Linear Regression Models for Each CXT Learning Outcome ##
+
+```{r}
+
+# CXT 1 = β0 + β1 * (Number of Artifact Pages) + β2 * (0 for Humanities, 1 for Social Science) + 
+# β3 * (0 for early, 1 for late) + β4 * (0 for 1 type of assignment chosen, 1 for more than 1) + 
+# β5 * (0 for Humanities, 1 for Social Science) * (0 for early, 1 for late)
+
+cxt1_linear <- lm(cxt1 ~ numPages + courseDiscipline + assignmentTime + courseDiscipline:assignmentTime + IsVaried, 
+                  data = modified_df)
+
+
+# prints model diagnostics
+summary(cxt1_linear)
+```
+
+```{r}
+
+# CXT 2a = β0 + β1 * (Number of Artifact Pages) + β2 * (0 for Humanities, 1 for Social Science) + 
+# β3 * (0 for early, 1 for late) + β4 * (0 for 1 type of assignment chosen, 1 for more than 1)
+
+cxt2a_linear <- lm(cxt2a ~ numPages + courseDiscipline + assignmentTime + IsVaried, 
+                  data = modified_df)
+
+# prints model diagnostics
+summary(cxt2a_linear)
+```
+
+```{r}
+
+# CXT 2b = β0 + β1 * (Number of Artifact Pages) + β2 * (0 for Humanities, 1 for Social Science) + 
+# β3 * (0 for early, 1 for late) + β4 * (0 for 1 type of assignment chosen, 1 for more than 1)
+
+cxt2b_linear <- lm(cxt2b ~ numPages + courseDiscipline + assignmentTime + IsVaried, 
+                  data = modified_df)
+
+# prints model diagnostics
+summary(cxt2b_linear)
+```
+
+```{r}
+
+# CXT 3 = β0 + β1 * (Number of Artifact Pages) + β2 * (0 for Humanities, 1 for Social Science) + 
+# β3 * (0 for early, 1 for late) + β4 * (0 for 1 type of assignment chosen, 1 for more than 1) + 
+# β5 * (0 for Humanities, 1 for Social Science) * (0 for early, 1 for late)
+
+cxt3_linear <- lm(cxt3 ~ numPages + courseDiscipline + assignmentTime + courseDiscipline:assignmentTime + IsVaried, 
+                  data = modified_df)
+
+# prints model diagnostics
+summary(cxt3_linear)
+```
+
+```{r}
+
+# CXT 4a = β0 + β1 * (Number of Artifact Pages) + β2 * (0 for Humanities, 1 for Social Science) + 
+# β3 * (0 for early, 1 for late) + β4 * (0 for 1 type of assignment chosen, 1 for more than 1) + 
+# β5 * (0 for Humanities, 1 for Social Science) * (0 for early, 1 for late)
+
+cxt4a_linear <- lm(cxt4a ~ numPages + courseDiscipline + assignmentTime + courseDiscipline:assignmentTime + IsVaried, 
+                  data = modified_df)
+
+# prints model diagnostics
+summary(cxt4a_linear)
+```
+
+```{r}
+
+# CXT 4b = β0 + β1 * (Number of Artifact Pages) + β2 * (0 for Humanities, 1 for Social Science) + 
+# β3 * (0 for early, 1 for late) + β4 * (0 for 1 type of assignment chosen, 1 for more than 1) 
+
+cxt4b_linear <- lm(cxt4b ~ numPages + courseDiscipline + assignmentTime + IsVaried, 
+                  data = modified_df)
+
+# prints model diagnostics
+summary(cxt4b_linear)
+```
+
+## Spring 2026 84-389 Terrorism and Insurgency: Early vs. Late ##
+## (with Same Type of Assignment for both assignments) ###
+
+```{r}
+# Running the Kruskal-Wallis Test on Each CXT Learning Outcome Coded for the Course Artifacts 
+
+# print the test results for CXT 1
+print(kruskal.test(cxt1 ~ assignmentTime, data = S26_84389))
+
+# print the test results for CXT 3
+print(kruskal.test(cxt3 ~ assignmentTime, data = S26_84389))
+
+# print the test results for CXT 4a
+print(kruskal.test(cxt4a ~ assignmentTime, data = S26_84389))
+```
+### Checking for Difference in Rating Between Early and Late ###
+
+```{r}
+# prints the model diagnostics of a simple linear regression model 
+
+# CXT 1 = β0 + β1 * (0 for early, 1 for late)
+
+summary(lm(cxt1 ~ assignmentTime, data = S26_84389))
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
